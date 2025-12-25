@@ -1,0 +1,657 @@
+////////////////////////////// main.dart////////////////////////////
+import 'dart:math';
+import 'dart:io';
+import 'package:dialog_flowtter/dialog_flowtter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:firebase_for_edai/SplashScreen.dart';
+import 'package:firebase_for_edai/pages/chat_page.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
+
+import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as Path;
+
+import "dart:developer" as logDev;
+
+import 'Messages.dart';
+import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(MaterialApp(
+    home:SplashScreen(),
+  ));
+}
+
+class DomainCardWidget extends StatelessWidget {
+  final String domainName;
+
+  const DomainCardWidget({required this.domainName});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+
+      onTap: () {
+        // Navigate to the ShowData page of the respective domain
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ShowData(domain: domainName),
+          ),
+        );
+      },
+      child: Card(
+        elevation: 20,
+        margin: EdgeInsets.all(8),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            domainName,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class DomainListPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+
+      appBar: AppBar(
+        backgroundColor:  Color(0xFF110488),
+        title: Text('Domains' , style: TextStyle(color: Colors.white),),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) =>ChatPage()),
+          );
+        },
+        child: Icon(Icons.chat_outlined),
+      ),
+      body: Container(
+        color: Color(0xFF8C0380),
+
+
+
+
+       child:  ListView(
+
+
+          children: [
+            DomainCardWidget(domainName: 'SMART AUTOMATION'),
+            DomainCardWidget(domainName: 'MEDTECH/BIOTECH/ HEALTHTECH'),
+            DomainCardWidget(domainName: 'AGRICULTURE, FOODTECH & RURAL DEVELOPMENT'),
+            DomainCardWidget(domainName: 'SMART VEHICLES'),
+            DomainCardWidget(domainName: 'TRANSPORTATION & LOGISTICS'),
+            DomainCardWidget(domainName: 'ROBOTICS AND DRONES'),
+            DomainCardWidget(domainName: 'CLEAN & GREEN TECHNOLOGY'),
+            DomainCardWidget(domainName: 'TOURISM'),
+            DomainCardWidget(domainName: 'RENEWABLE/ SUSTAINABLE ENERGY'),
+            DomainCardWidget(domainName: 'BLOCKCHAIN & CYBERSECURITY'),
+            DomainCardWidget(domainName: 'DISASTER MANAGEMENT'),
+            DomainCardWidget(domainName: 'SPACE TECHNOLOGY'),
+            DomainCardWidget(domainName: 'TOYS AND GAMES'),
+            DomainCardWidget(domainName: 'SMART EDUCATION'),
+            DomainCardWidget(domainName: 'FITNESS & SPORTS'),
+            DomainCardWidget(domainName: 'HERITAGE & CULTURE'),
+            DomainCardWidget(domainName: 'MISCELLANEOUS'),
+            // Add more DomainCardWidgets for other domains
+
+          ],
+        ),
+
+
+
+
+      ),
+    );
+  }
+}
+
+
+
+class AddData extends StatefulWidget {
+  const AddData({super.key});
+
+  @override
+  State<AddData> createState() => _AddDataState();
+}
+
+class _AddDataState extends State<AddData> {
+  List<String> textFieldsData = ['', '', ''];
+  String selectedDomain = '';
+  TextEditingController titleContoller = TextEditingController();
+  TextEditingController descContoller = TextEditingController();
+  TextEditingController EmailContoller= TextEditingController();
+  String? urlDownload;
+
+
+  addData(String title, String desc, String email,String imageUrl,String domain) async {
+    if (title.isEmpty || desc.isEmpty || email.isEmpty || imageUrl.isEmpty|| domain.isEmpty) {
+      logDev.log("Enter all required data");
+    } else {
+
+
+      // Store data in Firestore
+      FirebaseFirestore.instance.collection(domain).doc(title).set({
+        "Title": title,
+        "Description": desc,
+        "Email": email,
+        "ImageUrl": imageUrl,
+        // Add image URL to Firestore
+      }).then((value) {
+        logDev.log("Data inserted");
+        titleContoller.clear();
+        descContoller.clear();
+        EmailContoller.clear();
+        setState(() {
+          textFieldsData[0] = ''; // Assuming domain is the first element in textFieldsData
+        });
+      });
+    }
+  }
+  PlatformFile? pickedFile;
+  UploadTask? uploadTask;
+
+  Future selectFile() async{
+    final result= await FilePicker.platform.pickFiles();
+    if(result==null) return;
+    setState(() {
+      pickedFile=result.files.first;
+    });
+
+  }
+
+  Future uploadFile() async{
+    final bytes = pickedFile!.bytes;
+    final fileName = Path.basename(pickedFile!.name!);
+    final path = 'files/$fileName';
+    final file = File(pickedFile!.path!);
+
+    final ref = FirebaseStorage.instance.ref().child(path);
+    setState(() {
+      uploadTask =ref.putFile(file);
+    });
+
+    final snapshot = await uploadTask!.whenComplete((){});
+    urlDownload= await snapshot.ref.getDownloadURL();
+    print("Download link: $urlDownload");
+
+    addData(titleContoller.text.toString(), descContoller.text.toString(), EmailContoller.text.toString(), urlDownload!,selectedDomain,);
+
+    setState(() {
+      uploadTask==null;
+    });
+    try {
+      final snapshot = await uploadTask!.whenComplete(() {});
+      final urlDownload = await snapshot.ref.getDownloadURL();
+      print("Download link: $urlDownload");
+      setState(() {
+        uploadTask = null;
+      });
+    } catch (error) {
+      print('Error after upload: $error'); // Handle errors after upload
+    }
+
+
+  }
+
+
+  Widget buildProgress()=> StreamBuilder(
+      stream: uploadTask?.snapshotEvents,
+      builder: (context, snapshot){
+        if(snapshot.hasData){
+          final data = snapshot.data!;
+          double progress = data.bytesTransferred/ data.totalBytes;
+          return SizedBox(
+            height: 50,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: Colors.grey,
+                  color: Colors.green,
+                ),
+                Center(
+                  child: Text(
+                    '${(100 * progress).roundToDouble()}%',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                )
+
+              ],
+            ),
+          );
+
+        }else{
+          return const SizedBox(height: 50);
+        }
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+        appBar: AppBar(
+          title: Text("Add data"),
+
+          centerTitle: true,
+        ),
+        body: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              DropdownButton<String>(
+                items: [
+                  DropdownMenuItem<String>(
+                    value: 'SMART AUTOMATION',
+                    child: Text('SMART AUTOMATION'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'MEDTECH/BIOTECH/ HEALTHTECH',
+                    child: Text('MEDTECH/BIOTECH/ HEALTHTECH'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'AGRICULTURE, FOODTECH & RURAL DEVELOPMENT',
+                    child: Text('AGRICULTURE, FOODTECH & RURAL DEVELOPMENT'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'SMART VEHICLES',
+                    child: Text('SMART VEHICLES'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'TRANSPORTATION & LOGISTICS',
+                    child: Text('TRANSPORTATION & LOGISTICS'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'ROBOTICS AND DRONES',
+                    child: Text('ROBOTICS AND DRONES'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'TOURISM',
+                    child: Text('TOURISM'),
+                  ),DropdownMenuItem<String>(
+                    value: 'CLEAN & GREEN TECHNOLOGY',
+                    child: Text('CLEAN & GREEN TECHNOLOGY'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'RENEWABLE/ SUSTAINABLE ENERGY',
+                    child: Text('RENEWABLE/ SUSTAINABLE ENERGY'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'BLOCKCHAIN & CYBERSECURITY',
+                    child: Text('BLOCKCHAIN & CYBERSECURITY'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'SMART EDUCATION',
+                    child: Text('SMART EDUCATION'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'DISASTER MANAGEMENT',
+                    child: Text('DISASTER MANAGEMENT'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'SPACE TECHNOLOGY',
+                    child: Text('SPACE TECHNOLOGY'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'TOYS AND GAMES',
+                    child: Text('SPACE TECHNOLOGY'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'HERITAGE & CULTURE',
+                    child: Text('HERITAGE & CULTURE'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'MISCELLANEOUS',
+                    child: Text('MISCELLANEOUS'),
+                  ),
+
+
+                ],
+                onChanged: (value) {
+                  // Handle dropdown value change
+                  setState(() {
+                    selectedDomain = value!;
+                  });
+                  textFieldsData[0] = value!;
+                },
+                hint: Text(textFieldsData[0]),
+                isExpanded: true,
+              ),
+              SizedBox(
+                height: 10,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 25),
+                child: TextField(
+                  controller: titleContoller,
+                  decoration: InputDecoration(
+                      hintText: "enter title",
+                      suffixIcon: Icon(Icons.title),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(25))),
+                ),
+              ),
+              SizedBox(
+                height: 30,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 25),
+                child: TextField(
+                  controller: descContoller,
+                  decoration: InputDecoration(
+                      hintText: "enter description",
+                      suffixIcon: Icon(Icons.description),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(25))),
+                ),
+              ),
+              SizedBox(
+                height: 30,
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 25),
+                child: TextField(
+                  controller: EmailContoller,
+                  decoration: InputDecoration(
+                      hintText: "Email",
+                      suffixIcon: Icon(Icons.description),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(25))),
+                ),
+              ),
+              SizedBox(
+                height: 30,
+              ),
+              ElevatedButton(onPressed: selectFile,
+                child: const Text("Select File"),
+                style:  ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all<Color>(Colors.purple.shade100),
+                ),
+              ),
+              ElevatedButton(onPressed: uploadFile,
+                child: const Text("Upload!!!"),
+                style:  ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all<Color>(Colors.purple.shade100),
+                ),
+              ),
+              const SizedBox(height: 32),
+              buildProgress(),
+
+
+              ElevatedButton(onPressed: () {
+                addData(titleContoller.text.toString(), descContoller.text.toString(),EmailContoller.text.toString(),urlDownload!,selectedDomain,);
+              }, child: Text("Save"))
+            ],
+          ),
+        ));
+
+  }
+
+}
+
+
+
+
+class ShowData extends StatefulWidget {
+  final String domain;
+  const ShowData({required this.domain,Key? key}) : super(key: key);
+
+  @override
+  State<ShowData> createState() => _ShowDataState();
+}
+
+class _ShowDataState extends State<ShowData> {
+  late Future<List<DocumentSnapshot>> _futureData;
+  late List<DocumentSnapshot> _projects = [];
+  late List<DocumentSnapshot> _filteredProjects = [];
+
+  TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _futureData = fetchUserData();
+  }
+
+  Future<List<DocumentSnapshot>> fetchUserData() async {
+    QuerySnapshot querySnapshot =
+    await FirebaseFirestore.instance.collection(widget.domain).get();
+    _projects = querySnapshot.docs;
+    _filteredProjects = List.from(_projects);
+    return _projects;
+  }
+
+  void _filterProjects(String query) {
+    setState(() {
+      _filteredProjects = _projects
+          .where((project) =>
+          project["Title"]
+              .toString()
+              .toLowerCase()
+              .contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  Future<void> _refreshData() async {
+    setState(() {
+      _futureData = fetchUserData();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Show Data - ${widget.domain}",
+          style: TextStyle(
+            color: Colors.purple, // Change text color here
+            fontSize: 24, // Change font size here
+            fontWeight: FontWeight.bold , // Change font weight here
+
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshData,
+        child: SingleChildScrollView(
+          physics: AlwaysScrollableScrollPhysics(),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search projects...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10.0),
+                    ),
+                  ),
+                  onChanged: _filterProjects,
+                ),
+              ),
+              _buildProjectList(),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => AddData()),
+          );
+        },
+        child: Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildProjectList() {
+    return FutureBuilder(
+      future: _futureData,
+      builder: (context, AsyncSnapshot<List<DocumentSnapshot>> snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text("Error: ${snapshot.error}"),
+          );
+        }
+        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+          return ListView.builder(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            itemCount: _filteredProjects.length,
+            itemBuilder: (context, index) {
+              var document = _filteredProjects[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text("${index + 1}"),
+                ),
+                title: Text(document["Title"],
+                  style: TextStyle(
+                    color: Colors.black87, // Change text color here
+                    fontSize: 18, // Change font size here
+                    fontWeight: FontWeight.bold, // Change font weight here
+                  ),
+                ),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ItemDetailsPage(
+                        document: document,
+                        imageUrl: document["ImageUrl"],
+                      ),
+                    ),
+                  );
+                },
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Description: ${truncateDescription(document["Description"], 20)}",
+                      style: TextStyle(
+                        color: Colors.black, // Change text color here
+                        fontSize: 14,
+                        // Change font size here
+                      ),
+                    ),
+                    Text(document["Email"] ?? "",
+                      style: TextStyle(
+                        color: Colors.black, // Change text color here
+                        fontSize: 14, // Change font size here
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        } else {
+          return Center(
+            child: Text("No data available"),
+          );
+        }
+      },
+    );
+  }
+  String truncateDescription(String text, int maxWords) {
+    List<String> words = text.split(' ');
+    if (words.length > maxWords) {
+      return words.sublist(0, maxWords).join(' ') + '...';
+    } else {
+      return text;
+    }
+  }
+}
+
+class ItemDetailsPage extends StatelessWidget {
+  final DocumentSnapshot document;
+  final String? imageUrl;
+
+  const ItemDetailsPage({Key? key, required this.document, this.imageUrl})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Title: ${document["Title"]}",
+          style: TextStyle(
+            color: Colors.indigo,
+            fontStyle: FontStyle.italic,
+            fontSize: 24,
+
+
+          ),
+        ),
+      ),
+      body:Container(
+        color: Colors.grey[200],
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (imageUrl != null) // Show image if imageUrl is not null
+                  Image.network(imageUrl!),
+                SizedBox(height: 20),
+                Text("Description: ${document["Description"]}",
+                  style: TextStyle(
+                    color: Colors.indigo,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 15,
+
+
+                  ),
+                ),
+                SizedBox(height: 10),
+                Text("Email: ${document["Email"]}",
+                  style: TextStyle(
+                    color: Colors.indigo,
+                    fontStyle: FontStyle.italic,
+                    fontSize: 15,
+
+
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
